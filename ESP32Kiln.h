@@ -41,7 +41,7 @@ uint16_t ALARM_countdown=0; // countdown in seconds to stop alarm
 double int_temp=20, kiln_temp=20, case_temp=20;
 double set_temp, pid_out;
 float temp_incr=0;
-#define PID_WINDOW_DIVIDER 1
+#define PID_WINDOW_DIVIDER 1  // multiplier for pid_out vs window comparison (1 = direct ms mapping)
 unsigned long windowStartTime;
 unsigned long now;
 
@@ -256,6 +256,7 @@ typedef enum { // program menu positions
   PRF_PID_POE,
   PRF_PID_TEMP_THRESHOLD,
   PRF_PID_MEASURE_INTERVAL,
+  PRF_PID_CAL_TEMP,
 
   PRF_LOG_WINDOW,
   PRF_LOG_LIMIT,
@@ -280,7 +281,7 @@ const char *PrefsName[]={
 "HTTP_Local_JS",
 "Auth_Username","Auth_Password",
 "NTP_Server1","NTP_Server2","NTP_Server3","GMT_Offset_sec","Daylight_Offset_sec","Initial_Date","Initial_Time",
-"PID_Algorithm", "PID_Window","PID_Kp","PID_Ki","PID_Kd","PID_POE","PID_Temp_Threshold", "PID_MeasureInterval",
+"PID_Algorithm", "PID_Window","PID_Kp","PID_Ki","PID_Kd","PID_POE","PID_Temp_Threshold", "PID_Measure_Interval", "PID_Cal_Temp",
 "LOG_Window","LOG_Files_Limit",
 "MIN_Temperature","MAX_Temperature","MAX_Housing_Temperature","Thermal_Runaway","Alarm_Timeout","MAX31855_Error_Grace_Count",
 "DBG_Serial","DBG_Syslog","DBG_Syslog_Srv","DBG_Syslog_Port",
@@ -346,3 +347,5 @@ void LCD_Display_quick_program(int dir=0,byte pos=0);
 uint8_t Cleanup_program(uint8_t err=0);
 uint8_t Load_program(char *file=0);
 void ABORT_Program(uint8_t error=0);
+bool CalibrateInit();
+void CalibrateAbort();

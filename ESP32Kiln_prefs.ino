@@ -226,6 +226,10 @@ char tmp[30];
         Prefs[PRF_PID_MEASURE_INTERVAL].type=UINT16;
         Prefs[PRF_PID_MEASURE_INTERVAL].value.uint16=500; // 500 ms
         break;
+      case PRF_PID_CAL_TEMP:  // target temperature for PID auto-calibration
+        Prefs[PRF_PID_CAL_TEMP].type=UINT16;
+        Prefs[PRF_PID_CAL_TEMP].value.uint16=300; // 300°C default
+        break;
       case PRF_LOG_WINDOW:
         Prefs[PRF_LOG_WINDOW].type=UINT16;
         Prefs[PRF_LOG_WINDOW].value.uint16=30;

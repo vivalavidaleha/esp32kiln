@@ -562,8 +562,18 @@ boolean save=false;
         save=true;
         continue;
       }else if(p->name().equalsIgnoreCase("pidauto")){
-        DBG dbgLog(LOG_DEBUG,"[HTTP] Handle PID Auto Calibration");        
-        CalibrateInit();
+        DBG dbgLog(LOG_DEBUG,"[HTTP] Handle PID Auto Calibration");
+        if (!CalibrateInit()) {
+          DBG dbgLog(LOG_ERR,"[HTTP] PID Auto Calibration REJECTED - system busy (state %d)", (int)Program_run_state);
+        }
+        continue;
+      }else if(p->name().equalsIgnoreCase("pidabort")){
+        DBG dbgLog(LOG_DEBUG,"[HTTP] Handle PID Calibration Abort");
+        if (Program_run_state == PR_CALIBRATE) {
+          CalibrateAbort();
+        } else {
+          DBG dbgLog(LOG_DEBUG,"[HTTP] PID Abort ignored - not calibrating (state %d)", (int)Program_run_state);
+        }
         continue;
       }else if(p->name().equalsIgnoreCase("update")){
         continue;

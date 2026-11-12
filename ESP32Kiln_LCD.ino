@@ -966,7 +966,15 @@ boolean is_calibrating=(Program_run_state==PR_CALIBRATE);
   if(pressed){
     if(yes){
       if(is_calibrating) CalibrateAbort();
-      else CalibrateInit();
+      else {
+        if (!CalibrateInit()) {
+          // System is busy (program running) - briefly show a message
+          u8g2.clearBuffer();
+          u8g2.drawStr(x,y,"System busy!");
+          u8g2.sendBuffer();
+          delay(1500);
+        }
+      }
     }
     LCD_display_main_view();
     return;
