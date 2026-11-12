@@ -15,7 +15,7 @@ float _calP = .5 / DEFAULT_TEMP_RISE_AFTER_OFF;
 float _calI = 4 / DEFAULT_TEMP_RISE_AFTER_OFF;
 float _calD = 5.0 / DEFAULT_TEMP_RISE_AFTER_OFF;
 
-PID_ATune aTune(&kiln_temp, &pid_out, &set_temp, &now, DIRECT);
+PID_ATune aTune(&kiln_temp, &pid_out);
 
 // Attempt to start PID auto-calibration.
 // Returns true if calibration started, false if blocked (e.g. a program is already running).
@@ -41,7 +41,6 @@ bool CalibrateInit()
     aTune.SetOutputStep(tuner_output_step); // half of PID window range
     aTune.SetControlType(tuner_id);
     aTune.SetLookbackSec(30);              // 30 seconds lookback for oscillation detection
-    aTune.SetSampleTime(measureInterval);
     windowStartTime = millis();
     aTune.Runtime(); // initialize autotuner here, as later we give it actual readings
 
