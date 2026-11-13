@@ -267,7 +267,7 @@ char msg[MAX_CHARS_PL];
     int fullt,currt;
     float prop;
     fullt=(int)(Program_run_end-Program_run_start); // how long should program last
-    currt=time(NULL)-Program_run_start;     // where are we now?
+    currt=(millis()-Program_run_start_ms)/1000; // monotonic elapsed run time
     prop=(float)currt/(float)fullt;   // current progress status
     u8g2.setDrawColor(2);
     DBG dbgLog(LOG_DEBUG,"[LCD] Redrawing box on graph width:%.2f fullt:%d currt:%d prop:%f\n",(float)((SCREEN_W-2)*prop),fullt,currt,prop);

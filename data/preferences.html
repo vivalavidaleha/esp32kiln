@@ -247,20 +247,20 @@
                               </div>
                         </div>
                         <div class="mb-3 row">
-                              <label for="Initial_Date" class="col-sm-3 col-form-label"> Initial date - if no NTP
+                              <label for="Initial_Date" class="col-sm-3 col-form-label"> Initial date - if no RTC/NTP
                               </label>
                               <div class="col-sm-9">
                                     <input type="date" class="form-control" name="Initial_Date" value="%Initial_Date%"
-                                          title="What date should be assumed after boot, if no Internet and NTP servers">
+                                          title="Fallback date used only when neither a valid RTC nor NTP time is available">
                               </div>
                         </div>
                         <div class="mb-3 row">
-                              <label for="Initial_Time" class="col-sm-3 col-form-label"> Initial time - if no NTP
+                              <label for="Initial_Time" class="col-sm-3 col-form-label"> Initial time - if no RTC/NTP
                               </label>
                               <div class="col-sm-9">
                                     <input type="time" class="form-control" name="Initial_Time" value="%Initial_Time%"
                                           step="1"
-                                          title="What time should be assumed after boot, if no Internet and NTP servers">
+                                          title="Fallback time used only when neither a valid RTC nor NTP time is available">
                               </div>
                         </div>
                   </fieldset>

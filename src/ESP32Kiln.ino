@@ -133,6 +133,11 @@ void setup() {
 
   // Load all preferences from disk
   Load_prefs();
+
+  // Initialize wall-clock time from the RTC (or configured fallback), then enable NTP.
+  Setup_RTC();
+  Configure_Time();
+  Setup_start_date();
   
   // Setup function for LCD display from ESP32Kiln_LCD.ino
   Setup_LCD();
@@ -163,8 +168,6 @@ void setup() {
       setup_OTA("ESP32Kiln");
     }
   }else{
-    // If we don't have Internet - assume there is no time set
-    Setup_start_date(); // in ESP32Kiln_net
     Disable_WiFi();
     strcpy(msg,"   -- Started! --");
     load_msg(msg);

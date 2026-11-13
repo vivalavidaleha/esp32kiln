@@ -23,6 +23,12 @@ const int MAX_Prog_File_Size=10240;  // maximum file size (bytes) that can be up
 #define EMR_RELAY_PIN 21
 #define SSR1_RELAY_PIN 19
 //#define SSR2_RELAY_PIN 22   // if you want to use additional SSR for second heater, uncoment this
+#ifndef RTC_SDA_PIN
+#define RTC_SDA_PIN 25
+#endif
+#ifndef RTC_SCL_PIN
+#define RTC_SCL_PIN 33
+#endif
 
 // MAX31855 variables/defs
 #define MAXCS1  27    // for hardware SPI - HSPI (MOSI-13, MISO-12, CLK-14) - 1st device CS-27
@@ -30,6 +36,9 @@ const int MAX_Prog_File_Size=10240;  // maximum file size (bytes) that can be up
 
 // If you have power meter - uncoment this
 //#define ENERGY_MON_PIN 33       // if you don't use - comment out
+#if defined(ENERGY_MON_PIN) && (ENERGY_MON_PIN == RTC_SDA_PIN || ENERGY_MON_PIN == RTC_SCL_PIN)
+#error "RTC and power meter must use different GPIO pins"
+#endif
 
 #define ALARM_PIN 26        // Pin goes high on abort
 uint16_t ALARM_countdown=0; // countdown in seconds to stop alarm
@@ -139,6 +148,9 @@ uint8_t Program_run_size=0;       // number of entries in running program (since
 char *Program_run_desc=NULL,*Program_run_name=NULL;
 time_t Program_run_start=0;       // date/time of started program
 time_t Program_run_end=0;         // date/time when program ends - during program it's ETA
+uint32_t Program_run_start_ms=0;  // monotonic start time for duration/progress calculations
+uint32_t Program_step_deadline_ms=0;
+bool Program_step_ramping=false;
 int Program_run_step=-1;          // at which step are we now... (has to be it - so we can give it -1)
 uint16_t Program_start_temp=0;    // temperature on start of the program
 uint8_t Program_error=0;          // if program finished with errors - remember number

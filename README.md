@@ -7,7 +7,7 @@ ESP32Kiln is PID temperature controller, for any task involving high temperature
 - Internal ESP SPIFFS storage for programs, data, logs, configuration (perhaps later SD - but I'm not sure yet)
 - Local preferences on disk, editable with Web interface
 - Online monitoring, program management, editing, graphs and kiln control
-- Build in clock synchronised with NTP servers (if Internet connected)
+- Optional DS3231 RTC for offline wall-clock time, synchronized with NTP when Internet is available
 - Safety features build in (temperature run out protection, probe failure, SSR failure, kiln insulation failure)
 - Online PIDKiln firmware upgrade with web interface
 - Syslog type, over the network (UDP) logging to remote server
@@ -32,6 +32,7 @@ Optional:
 - DC/AC secondary relay - like SLA-05VDC-SL-C (240V/30A) mechanical relay
 - Additional MAX31855 board with K-type thermocouple for housing temperature measuring
 - Coil power meter - 30A/1V. This is contact less power meter that generates small current when energy flows inside it's coil. Mine already had burden resistor - so on output it produces -1V to 1V, proportionally it's coil rated for 30A. We just need to measure it to know how much juice flows to the heater.
+- HW-111 I2C RTC module (DS3231)
 - Perhaps a kiln :)
 
 ## BOM and expenses
@@ -139,6 +140,20 @@ ESP   | 30A/1V
 GND   | GND
 33    | most outside mini jack connector
 
+**RTC (HW-111 / DS3231)**
+
+The RTC uses the ESP32 I2C bus on GPIO 25 (SDA) and GPIO 33 (SCL). Power the module from 3.3V so its I2C pull-ups do not expose ESP32 pins to 5V.
+The RTC provides calendar time and keeps it through power loss. NTP corrects the RTC when available; otherwise the ESP32 refreshes its system clock from the RTC periodically. Kiln program durations and PID windows use the ESP32 monotonic millisecond clock, so wall-clock corrections do not speed up or pause a firing.
+
+ESP32 | RTC
+------|-----
+3.3V  | VCC
+GND   | GND
+25    | SDA
+33    | SCL
+
+GPIO 33 is also the optional power-meter input; if both the RTC and power meter are installed, change one assignment in the firmware so they use separate GPIOs.
+
 **Alarm**
 
 This ALARM_PIN goes HIGH when program ABORT is called (somethings wrong, or user triggered). You can connect this pin to buzzer or small relay to trigger some other action on failure.
@@ -232,7 +247,6 @@ pio run -e esp32-dev-4mb -t uploadfs
 
 Almost all, what I had in mind is done.. so not much to write here :)
 Perhaps...
-- RTC clock for better timing and no Internet installations
 - MQTT reporting
 - HomeAssistant integration
 

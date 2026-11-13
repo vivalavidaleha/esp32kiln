@@ -2,9 +2,63 @@
 ** Network related functions
 **
 */
+#include <Wire.h>
+#include <RTClib.h>
+#include <esp_sntp.h>
 
 #define DEFAULT_AP "ESP32Kiln_AP"
 #define DEFAULT_PASS "hotashell"
+
+RTC_DS3231 kilnRTC;
+bool rtcAvailable=false;
+volatile bool ntpSyncPending=false;
+uint32_t lastRtcSystemSyncMs=0;
+
+void onNtpTimeSync(struct timeval *tv){
+  ntpSyncPending=true;
+}
+
+void Setup_RTC(){
+  Wire.begin(RTC_SDA_PIN,RTC_SCL_PIN);
+  if(!kilnRTC.begin(&Wire)){
+    DBG dbgLog(LOG_WARNING,"[RTC] DS3231 not found on SDA:%d SCL:%d\n",RTC_SDA_PIN,RTC_SCL_PIN);
+    return;
+  }
+  rtcAvailable=true;
+  DBG dbgLog(LOG_INFO,"[RTC] DS3231 detected%s\n",kilnRTC.lostPower()?" (clock lost power)":"");
+}
+
+void Configure_Time(){
+  sntp_set_time_sync_notification_cb(onNtpTimeSync);
+  configTime(Prefs[PRF_GMT_OFFSET].value.int32,Prefs[PRF_DAYLIGHT_OFFSET].value.int16,
+             Prefs[PRF_NTPSERVER1].value.str,Prefs[PRF_NTPSERVER2].value.str,Prefs[PRF_NTPSERVER3].value.str);
+}
+
+bool Sync_RTC_From_NTP(){
+  if(!ntpSyncPending) return false;
+  ntpSyncPending=false;
+  if(!rtcAvailable) return false;
+
+  time_t now=time(NULL);
+  if(now<1577836800) return false; // Ignore time values earlier than 2020.
+  kilnRTC.adjust(DateTime((uint32_t)now));
+  lastRtcSystemSyncMs=millis();
+  DBG dbgLog(LOG_INFO,"[RTC] Updated from NTP: %lu\n",(unsigned long)now);
+  return true;
+}
+
+bool Sync_System_Time_From_RTC(){
+  if(!rtcAvailable || millis()-lastRtcSystemSyncMs<60000) return false;
+
+  DateTime rtcNow=kilnRTC.now();
+  if(rtcNow.year()<2020) return false;
+  struct timeval tv;
+  tv.tv_sec=rtcNow.unixtime();
+  tv.tv_usec=0;
+  settimeofday(&tv,NULL);
+  lastRtcSystemSyncMs=millis();
+  return true;
+}
 
 // Other variables
 //
@@ -24,9 +78,20 @@ struct tm timeinfo;
 //
 void Setup_start_date(){
 struct timeval tv;
-struct tm mytm;
-uint8_t pos;
+struct tm mytm={};
 char *tmp,msg[20];
+
+  if(rtcAvailable && !kilnRTC.lostPower()){
+    DateTime rtcNow=kilnRTC.now();
+    if(rtcNow.year()>=2020){
+      tv.tv_sec=rtcNow.unixtime();
+      tv.tv_usec=0;
+      settimeofday(&tv,NULL);
+      lastRtcSystemSyncMs=millis();
+      DBG dbgLog(LOG_INFO,"[RTC] System clock initialized from RTC: %lu\n",(unsigned long)tv.tv_sec);
+      return;
+    }
+  }
 
   strcpy(msg,Prefs[PRF_INIT_DATE].value.str);
   tmp=strtok(msg,".-:");
@@ -53,6 +118,7 @@ char *tmp,msg[20];
   tmp=strtok(NULL,".-:");
   DBG dbgLog(LOG_INFO,"[NET] s:%s\n",tmp);
   mytm.tm_sec = atoi(tmp);        //0-59
+  mytm.tm_isdst = -1;
   
   time_t t = mktime(&mytm);
 
@@ -60,6 +126,11 @@ char *tmp,msg[20];
   tv.tv_usec = 0;
 
   settimeofday(&tv, NULL);
+  if(rtcAvailable){
+    kilnRTC.adjust(DateTime((uint32_t)t));
+    lastRtcSystemSyncMs=millis();
+    DBG dbgLog(LOG_INFO,"[RTC] Initialized from configured fallback time\n");
+  }
 }
 
 
@@ -130,17 +201,13 @@ boolean Start_WiFi_CLIENT(){
 // Starts WiFi and all networks services
 //
 boolean Setup_WiFi(){
-struct tm timeinfo;
-
-  Setup_start_date();
-
   if(Prefs[PRF_WIFI_MODE].value.uint8){ // we have WiFi enabled in config - start it
     int err=0;
 
     if(Prefs[PRF_WIFI_MODE].value.uint8==1 || Prefs[PRF_WIFI_MODE].value.uint8==2){ // 1 - tries as client if failed, be AP; 2 - just try as client
       err=Start_WiFi_CLIENT();
       if(!err){
-        configTime(Prefs[PRF_GMT_OFFSET].value.int32, Prefs[PRF_DAYLIGHT_OFFSET].value.int16, Prefs[PRF_NTPSERVER1].value.str, Prefs[PRF_NTPSERVER2].value.str, Prefs[PRF_NTPSERVER3].value.str); // configure RTC clock with NTP server - or at least try
+        Configure_Time();
         SETUP_WebServer(); // Setup function for Webserver from PIDKiln_http.ino
         initSysLog();
         return 0;    // all is ok - connected

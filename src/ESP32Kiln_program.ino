@@ -341,30 +341,44 @@ void RESUME_Program(){
 
 // Recalculate ETA based on current step
 //
-void Program_recalculate_ETA(boolean dwell=false){
+void Program_recalculate_ETA(){
+  uint32_t now_ms=millis();
+  int32_t current_step_ms=(int32_t)(Program_step_deadline_ms-now_ms);
+  time_t remaining_seconds=current_step_ms>0?(current_step_ms+999)/1000:0;
 
-  Program_run_end=time(NULL);
-  for(uint16_t a=Program_run_step; a<Program_run_size;a++){
-    if(!dwell) Program_run_end+=Program_run[a].togo*60;
-    else dwell=false;   // If we start counting with dwell=true - next step shoud start as a normal step, so dwell=fasle;
-    Program_run_end+=Program_run[a].dwell*60;
+  if(Program_run_step>=0 && Program_run_step<Program_run_size){
+    if(Program_step_ramping) remaining_seconds+=Program_run[Program_run_step].dwell*60;
+    for(uint16_t a=Program_run_step+1; a<Program_run_size; a++){
+      remaining_seconds+=(Program_run[a].togo+Program_run[a].dwell)*60;
+    }
+  }else{
+    for(uint16_t a=0; a<Program_run_size; a++){
+      remaining_seconds+=(Program_run[a].togo+Program_run[a].dwell)*60;
+    }
   }
+  Program_run_end=time(NULL)+remaining_seconds;
 }
 
 
 // This is functional called every second - if program is running. It calculates temperature grow, sets targets etc.
 //
 void Program_calculate_steps(boolean prg_start=false){
-static time_t step_start,next_step_end;
+static uint32_t last_step_update_ms=0;
 static uint16_t cnt1=1,cnt2=1;
-static boolean is_it_dwell=false;
 
   if(prg_start){  // starting program - do some startup stuff
     Program_run_step=-1; cnt1=0;
-    next_step_end=0;         // there was no previous step - so it has ended NOW
+    Program_step_deadline_ms=millis(); // there was no previous step - it has ended NOW
     cnt2=999;                // make sure we will parse first step
-    is_it_dwell=false;        // last step was dwell
+    Program_step_ramping=false;
+    last_step_update_ms=millis();
   }
+
+  uint32_t now_ms=millis();
+  uint32_t elapsed_ms=now_ms-last_step_update_ms;
+  last_step_update_ms=now_ms;
+  if(Program_run_state==PR_PAUSED || Program_run_state==PR_THRESHOLD)
+    Program_step_deadline_ms+=elapsed_ms;
 
   // Logging stuff - cnt1 - counter for this. If Prefs[PRF_LOG_WINDOW].value.uint16 == 0 - no logging
   cnt1++;
@@ -379,8 +393,7 @@ static boolean is_it_dwell=false;
     cnt2=1;
 
     if(Program_run_state==PR_PAUSED){   // if we are paused - calculate new ETA end exit
-      Program_recalculate_ETA(false);
-      next_step_end+=10;                // this is not precise but should be enough
+      Program_recalculate_ETA();
       return;
     }
 
@@ -390,16 +403,15 @@ static boolean is_it_dwell=false;
         DBG dbgLog(LOG_INFO,"[PRG] Temperature in TEMP_THRESHOLD. Kiln_temp:%.1f Set_temp:%.1f Window:%d\n",kiln_temp,set_temp,(int)Prefs[PRF_PID_TEMP_THRESHOLD].value.int16);
         //PAUSE_Program();
         Program_run_state=PR_THRESHOLD;
-        Program_recalculate_ETA(false);
-        next_step_end+=10; 
+        Program_recalculate_ETA();
         return;
       }else if(Program_run_state==PR_THRESHOLD) Program_run_state=PR_RUNNING;     
     }
 
     // calculate next step
-    if(time(NULL)>next_step_end){
+    if((int32_t)(now_ms-Program_step_deadline_ms)>=0){
       DBG dbgLog(LOG_DEBUG,"[DBG] Calculating new step!\n");
-      if(!is_it_dwell){  // we have finished full step togo+dwell (or this is first step)
+      if(!Program_step_ramping){  // we have finished full step togo+dwell (or this is first step)
         Program_run_step++; // lets icrement step
         
         if(Program_run_step>=Program_run_size){  //we have passed the last step - end program
@@ -407,29 +419,37 @@ static boolean is_it_dwell=false;
           return;
         }
         DBG dbgLog(LOG_DEBUG,"[PRG] Calculating new NORMAL step!\n");
-        is_it_dwell=true;   // next step will be dwell
-        step_start=time(NULL);
-        next_step_end=step_start+Program_run[Program_run_step].togo*60;
-        DBG dbgLog(LOG_DEBUG,"[PRG] Next step:%d Start step:%d Togo:%d Run_step:%d/%d Set_temp:%.3f\n",next_step_end,step_start,Program_run[Program_run_step].togo,Program_run_step,Program_run_size,set_temp);
+        Program_step_ramping=true;
+        Program_step_deadline_ms=now_ms+(uint32_t)Program_run[Program_run_step].togo*60000UL;
+        DBG dbgLog(LOG_DEBUG,"[PRG] Next step:%lu Togo:%d Run_step:%d/%d Set_temp:%.3f\n",(unsigned long)Program_step_deadline_ms,Program_run[Program_run_step].togo,Program_run_step,Program_run_size,set_temp);
         
         if(Program_run_step>0){ // is this a next step?
-          temp_incr=(float)(Program_run[Program_run_step].temp-Program_run[Program_run_step-1].temp)/(Program_run[Program_run_step].togo*60);
+          if(Program_run[Program_run_step].togo)
+            temp_incr=(float)(Program_run[Program_run_step].temp-Program_run[Program_run_step-1].temp)/(Program_run[Program_run_step].togo*60);
+          else{
+            temp_incr=0;
+            set_temp=Program_run[Program_run_step].temp;
+          }
           DBG dbgLog(LOG_DEBUG,"[PRG] temp_inc:%f Step_temp:%d Step-1_temp:%d\n",temp_incr,Program_run[Program_run_step].temp,Program_run[Program_run_step-1].temp);
         }else{      // or this is teh first one?
           DBG dbgLog(LOG_DEBUG,"[DBG] First step.\n");
           set_temp=kiln_temp;
-          temp_incr=(float)(Program_run[Program_run_step].temp-kiln_temp)/(Program_run[Program_run_step].togo*60);
+          if(Program_run[Program_run_step].togo)
+            temp_incr=(float)(Program_run[Program_run_step].temp-kiln_temp)/(Program_run[Program_run_step].togo*60);
+          else{
+            temp_incr=0;
+            set_temp=Program_run[Program_run_step].temp;
+          }
         }
-        Program_recalculate_ETA(false);   // recalculate ETA for normal step
+        Program_recalculate_ETA();   // recalculate ETA for normal step
       }else{
         DBG dbgLog(LOG_DEBUG,"[DBG] Calculating new DWELL step!");
-        is_it_dwell=false;      // next step will be normal
+        Program_step_ramping=false;
         temp_incr=0;
-        step_start=time(NULL);
-        next_step_end=step_start+Program_run[Program_run_step].dwell*60;
+        Program_step_deadline_ms=now_ms+(uint32_t)Program_run[Program_run_step].dwell*60000UL;
         set_temp=Program_run[Program_run_step].temp;
-        DBG dbgLog(LOG_DEBUG,"[PRG] Next step:%d Start step:%d Togo:%d Run_step:%d/%d Set_temp:%f\n",next_step_end,step_start,Program_run[Program_run_step].dwell,Program_run_step,Program_run_size,set_temp);
-        Program_recalculate_ETA(true);  // recalculate ETA for dwell
+        DBG dbgLog(LOG_DEBUG,"[PRG] Next step:%lu Dwell:%d Run_step:%d/%d Set_temp:%f\n",(unsigned long)Program_step_deadline_ms,Program_run[Program_run_step].dwell,Program_run_step,Program_run_size,set_temp);
+        Program_recalculate_ETA();  // recalculate ETA for dwell
       }
     }
     DBG dbgLog(LOG_INFO,"[PRG] Curr temp: %.0f, Set_temp: %.0f, Incr: %.2f Pid_out:%.2f Step: %d\n", kiln_temp, set_temp, temp_incr, pid_out*PID_WINDOW_DIVIDER, Program_run_step);
@@ -456,6 +476,7 @@ void START_Program(){
 
   KilnPID.SetTunings(Prefs[PRF_PID_KP].value.vfloat,Prefs[PRF_PID_KI].value.vfloat,Prefs[PRF_PID_KD].value.vfloat,Prefs[PRF_PID_POE].value.uint8); // set actual PID parameters
   Program_run_start=time(NULL);
+  Program_run_start_ms=millis();
   Program_calculate_steps(true);
   windowStartTime=millis();
 
@@ -499,6 +520,10 @@ void Program_Loop(void *parameter)
   {
 
     now = millis();
+    bool ntpSynced=Sync_RTC_From_NTP();
+    bool rtcSynced=Sync_System_Time_From_RTC();
+    if((ntpSynced || rtcSynced) && (Program_run_state==PR_RUNNING || Program_run_state==PR_PAUSED || Program_run_state==PR_THRESHOLD))
+      Program_recalculate_ETA();
 
     // OTA
     ArduinoOTA.handle();
